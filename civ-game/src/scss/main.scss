@@ -1,0 +1,9 @@
+// Import Bootstrap
+@import "../../node_modules/bootstrap/scss/bootstrap";
+
+// Custom styles
+body {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
