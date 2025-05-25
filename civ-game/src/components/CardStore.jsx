@@ -10,7 +10,8 @@ export default function Store({ show, onHide, onBuyCard, currentPlayer }) {
       type: "Military",
       cost: 1,
       effect: "65% chance to reduce 2-3M from target",
-      action: "attack"
+      action: "attack",
+      consumable: true
     },
     {
       id: 2,
@@ -18,7 +19,8 @@ export default function Store({ show, onHide, onBuyCard, currentPlayer }) {
       type: "Economy",
       cost: 3,
       effect: "Gain +1M/year (+2M if not at war)",
-      action: "production"
+      action: "production",
+      consumable: true,
     },
     {
       id: 3,
@@ -26,7 +28,8 @@ export default function Store({ show, onHide, onBuyCard, currentPlayer }) {
       type: "Science",
       cost: 3,
       effect: "Gain +3 Science Points",
-      action: "research"
+      action: "research",
+      consumable: true
     },
     {
       id: 4,
@@ -34,7 +37,8 @@ export default function Store({ show, onHide, onBuyCard, currentPlayer }) {
       type: "Military",
       cost: 2,
       effect: "55% chance to steal 1-2M from target",
-      action: "steal"
+      action: "steal",
+      consumable: true
     }
   ];
 

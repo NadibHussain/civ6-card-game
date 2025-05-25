@@ -1,95 +1,70 @@
-import { Modal, Button, Alert } from 'react-bootstrap';
-
-export default function CardAction({ 
-  show, 
-  onHide, 
-  card, 
-  currentPlayer, 
-  players, 
-  onActionComplete 
-}) {
-  // Safe default if card is null
-  if (!card) {
-    return (
-      <Modal show={show} onHide={onHide} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>No Card Selected</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Alert variant="danger">No card was selected for this action.</Alert>
-        </Modal.Body>
-      </Modal>
-    );
-  }
-
-  const handleAttack = (targetPlayer) => {
-    if (!targetPlayer) return;
-    
-    const isSuccess = Math.random() < 0.65;
-    const damage = isSuccess ? Math.floor(Math.random() * 2) + 2 : 0;
-
-    const updatedPlayers = players.map(p => {
-      if (p.nation === targetPlayer.nation) {
-        return {
-          ...p,
-          money: Math.max(0, p.money - damage),
-          atWarWith: [...new Set([...p.atWarWith, currentPlayer.nation])]
-        };
-      }
-      if (p.nation === currentPlayer.nation) {
-        return {
-          ...p,
-          atWarWith: [...new Set([...p.atWarWith, targetPlayer.nation])]
-        };
-      }
-      return p;
-    });
-
-    onActionComplete(
-      updatedPlayers,
-      isSuccess 
-        ? `Attack succeeded! ${targetPlayer.nation} lost ${damage}M` 
-        : 'Attack failed!'
-    );
-  };
-
-  const renderActionContent = () => {
-    switch (card.name) {
-      case 'Infantry':
-        return (
-          <>
-            <p className="mb-3">65% chance to reduce 2-3M from target</p>
-            <h6>Select target:</h6>
-            <div className="d-grid gap-2">
-              {players
-                .filter(p => p.nation !== currentPlayer.nation)
-                .map(player => (
-                  <Button
-                    key={player.nation}
-                    variant="outline-danger"
-                    onClick={() => handleAttack(player)}
-                  >
-                    Attack {player.nation} (💰 {player.money}M)
-                  </Button>
-                ))}
-            </div>
-          </>
-        );
+import { CARD_ACTIONS } from './CardEffect';
+import { useDispatch } from 'react-redux';
+import { updatePlayer, removeCard } from '../redux/slices/playersSlice'; // Add this import
+import TargetModal from './TargetModal';
+export default function CardAction({ card, currentPlayer, players, onComplete }) {
+  const dispatch = useDispatch();
+  
+  const handleAction = (targetIndex = null) => {
+    try {
+      const targetPlayer = targetIndex !== null ? players[targetIndex] : null;
+      const actionResult = CARD_ACTIONS[card.action](
+        currentPlayer, 
+        targetPlayer
+      );
       
-      // Add other card actions here
-      default:
-        return <Alert variant="warning">No action defined for this card type.</Alert>;
+      // Apply the results
+      if (actionResult.currentPlayer) {
+        dispatch(updatePlayer({
+          index: players.findIndex(p => p.nation === currentPlayer.nation),
+          updates: actionResult.currentPlayer
+        }));
+      }
+      if (actionResult.targetPlayer && targetIndex !== null) {
+        dispatch(updatePlayer({
+          index: targetIndex,
+          updates: actionResult.targetPlayer
+        }));
+      }
+      
+      // Remove consumable cards
+      if (card.consumable) {
+        dispatch(removeCard({
+          playerIndex: players.findIndex(p => p.nation === currentPlayer.nation),
+          cardId: card.id
+        }));
+      }
+      onComplete({message:actionResult.message,type:actionResult.type});
+    } catch (error) {
+      onComplete({message:"Action failed: " + error.message,messageType:"error"});
     }
   };
 
-  return (
-    <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Use {card.name}</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {renderActionContent()}
-      </Modal.Body>
-    </Modal>
-  );
+  // Render appropriate UI based on action type
+  switch(card.action) {
+    case 'attack':
+      return (
+        <TargetModal
+          title="Attack Target Selection"
+          description="65% chance to reduce 2-3M from target"
+          players={players}
+          currentPlayer={currentPlayer}
+          onSelect={handleAction}
+          buttonVariant="danger"
+          disabledCondition={(player) => player.money <= 0}
+        />
+      );
+      case 'steal':
+        return (
+          <TargetModal
+            title="Spy Target Selection"
+            description="55% chance to steal 1-2M from target"
+            players={players}
+            currentPlayer={currentPlayer}
+            onSelect={handleAction}
+            buttonVariant="warning"
+            disabledCondition={(player) => player.money <= 0}
+          />
+        );
+  }
 }

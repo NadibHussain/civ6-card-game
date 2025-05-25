@@ -1,58 +1,112 @@
-import { useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import backgroundImage from './assets/background.png'; 
+import { Modal, Button } from 'react-bootstrap';
 import PlayerCard from './components/PlayerCard';
-import Store from './components/Store';
+import Store from './components/CardStore';
 import CardAction from './components/CardAction';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import AlertMessage from './components/AlertMessage'; // Import the new component
+import { 
+  nextPlayer,
+  toggleStore,
+  toggleAction,
+  setCurrentCard,
+  setActionMessage,
+  incrementYear,
+  clearMessage
+} from './redux/slices/gameSlice';
+import { 
+  buyCard, 
+  updatePlayer, 
+} from './redux/slices/playersSlice';
 
 export default function App() {
-  // Game state
-  const [players, setPlayers] = useState([
-    { nation: 'Chinese', money: 7, science: 0, victoryPoints: 0, cards: [], atWarWith: [] },
-    { nation: 'American', money: 7, science: 0, victoryPoints: 0, cards: [], atWarWith: [] },
-    { nation: 'Russian', money: 7, science: 0, victoryPoints: 0, cards: [], atWarWith: [] },
-    { nation: 'European', money: 7, science: 0, victoryPoints: 0, cards: [], atWarWith: [] }
-  ]);
+  const dispatch = useDispatch();
+  const { 
+    year, 
+    maxYears, 
+    currentPlayerIndex, 
+    showStore, 
+    showAction, 
+    currentCard,
+    actionMessage,
+    messageType 
+  } = useSelector(state => state.game);
+  
+  const players = useSelector(state => state.players);
+  const currentPlayer = players[currentPlayerIndex];
 
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
-  const [showStore, setShowStore] = useState(false);
-  const [showAction, setShowAction] = useState(false);
-  const [currentCard, setCurrentCard] = useState(null);
-  const [actionMessage, setActionMessage] = useState('');
-
-  // Store functions
+  // Handle buying cards from store
   const handleBuyCard = (card) => {
-    setPlayers(prev => prev.map((player, index) => 
-      index === currentPlayerIndex 
-        ? { 
-            ...player, 
-            money: player.money - card.cost,
-            cards: [...player.cards, card] 
-          }
-        : player
-    ));
-    setShowStore(false);
+    dispatch(buyCard({ 
+      playerIndex: currentPlayerIndex, 
+      card 
+    }));
+
+    dispatch(toggleStore(false));
+    dispatch(setActionMessage({
+      message: `Purchased ${card.name} for ${card.cost}M`,
+      type: 'success'
+    }));
   };
 
-  // Card action functions
+  // Handle card actions
+  const handleActionComplete = (res) => {
+    dispatch(setActionMessage({
+      message: res.message,
+      type: res.type || 'info'
+    }));
+    dispatch(toggleAction(false));
+  };
+
+  // Handle using cards
   const handleUseCard = (card) => {
-    setCurrentCard(card);
-    setShowAction(true);
+    dispatch(setCurrentCard(card));
+    dispatch(toggleAction(true));
   };
 
-  const handleActionComplete = (updatedPlayers, message) => {
-    setPlayers(updatedPlayers);
-    setActionMessage(message);
-    setShowAction(false);
-    setTimeout(() => setActionMessage(''), 3000);
+  // Handle next player turn with year increment
+  const handleNextPlayer = () => {
+    const isLastPlayer = currentPlayerIndex === players.length - 1;
+    dispatch(nextPlayer());
+    
+    if (isLastPlayer) {
+      // Process year-end effects
+      players.forEach((player, index) => {
+        const factoryCards = player.cards.filter(card => card.name === 'Factory');
+        if (factoryCards.length > 0) {
+          const income = player.atWarWith.length === 0 ? 2 : 1;
+          dispatch(updatePlayer({
+            index,
+            updates: { money: player.money + income * factoryCards.length }
+          }));
+        }
+      });
+    }
   };
 
-  // Game progression
-  const nextPlayer = () => {
-    setCurrentPlayerIndex((prev) => (prev + 1) % players.length);
+  const handleCloseAlert = () => {
+    dispatch(clearMessage());
   };
 
   return (
+    
     <div className="position-relative vh-100 vw-100 bg-light">
+      <div 
+        className="position-relative vh-100 vw-100"
+        style={{
+          backgroundImage: `url(${backgroundImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
+        }}
+      />
+      <div className="position-absolute top-0 start-50 translate-middle-x mt-3">
+        <div className="bg-white p-2 rounded shadow-sm">
+          <h4 className="m-0">Year: {year}/{maxYears}</h4>
+        </div>
+      </div>
+
       {/* Player Cards */}
       {players.map((player, index) => (
         <PlayerCard
@@ -64,7 +118,7 @@ export default function App() {
             index === 1 ? 'top-right' :
             index === 2 ? 'bottom-left' : 'bottom-right'
           }
-          onOpenStore={() => index === currentPlayerIndex && setShowStore(true)}
+          onOpenStore={() => index === currentPlayerIndex && dispatch(toggleStore(true))}
           onUseCard={handleUseCard}
         />
       ))}
@@ -72,37 +126,42 @@ export default function App() {
       {/* Store Modal */}
       <Store
         show={showStore}
-        onHide={() => setShowStore(false)}
+        onHide={() => dispatch(toggleStore(false))}
         onBuyCard={handleBuyCard}
-        currentPlayer={players[currentPlayerIndex]}
+        currentPlayer={currentPlayer}
       />
 
       {/* Card Action Modal */}
-      <CardAction
-        show={showAction}
-        onHide={() => setShowAction(false)}
-        card={currentCard}
-        currentPlayer={players[currentPlayerIndex]}
-        players={players}
-        onActionComplete={handleActionComplete}
-      />
-
-      {/* Action Message */}
-      {actionMessage && (
-        <div className="position-fixed bottom-0 start-50 translate-middle-x mb-3">
-          <div className="alert alert-info">{actionMessage}</div>
-        </div>
-      )}
+      <Modal show={showAction} onHide={() => dispatch(toggleAction(false))} centered>
+        {currentCard && (
+          <CardAction
+            card={currentCard}
+            currentPlayer={currentPlayer}
+            players={players}
+            onComplete={handleActionComplete}
+            onHide={() => dispatch(toggleAction(false))}
+          />
+        )}
+      </Modal>
 
       {/* Game Controls */}
       <div className="position-absolute top-50 start-50 translate-middle">
-        <button 
-          className="btn btn-primary px-4 py-2"
-          onClick={nextPlayer}
+        <Button 
+          variant="primary"
+          size="lg"
+          onClick={handleNextPlayer}
         >
           Next Player
-        </button>
+        </Button>
       </div>
+
+      {/* Alert Message Component */}
+      <AlertMessage 
+        show={!!actionMessage}
+        message={actionMessage} 
+        type={messageType || 'info'} 
+        onClose={handleCloseAlert}
+      />
     </div>
   );
 }
